@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Email Priority Classifier</title>
+  <style>
+    /* ------------------------------------------------------------------ */
+    /* Reset & base                                                         */
+    /* ------------------------------------------------------------------ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+                   Roboto, Oxygen, Ubuntu, sans-serif;
+      background: #f0f2f5;
+      color: #212529;
+      min-height: 100vh;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Header                                                               */
+    /* ------------------------------------------------------------------ */
+    header {
+      background: linear-gradient(135deg, #0d1b2a 0%, #1b2a4a 100%);
+      color: #fff;
+      padding: 2rem 1.5rem;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+    }
+    header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+    header p {
+      margin-top: 0.4rem;
+      font-size: 1rem;
+      color: #a8b8d0;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Layout                                                               */
+    /* ------------------------------------------------------------------ */
+    main {
+      max-width: 860px;
+      margin: 2.5rem auto;
+      padding: 0 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.8rem;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Cards                                                                */
+    /* ------------------------------------------------------------------ */
+    .card {
+      background: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      padding: 1.8rem 2rem;
+    }
+    .card h2 {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: #0d1b2a;
+      margin-bottom: 1.2rem;
+      padding-bottom: 0.6rem;
+      border-bottom: 2px solid #e9ecef;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Form elements                                                        */
+    /* ------------------------------------------------------------------ */
+    .form-group { margin-bottom: 1rem; }
+    .form-group label {
+      display: block;
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #495057;
+      margin-bottom: 0.35rem;
+    }
+    .form-group input,
+    .form-group textarea {
+      width: 100%;
+      padding: 0.6rem 0.8rem;
+      border: 1.5px solid #ced4da;
+      border-radius: 7px;
+      font-size: 0.95rem;
+      font-family: inherit;
+      color: #212529;
+      background: #fdfdfd;
+      transition: border-color 0.2s;
+      resize: vertical;
+    }
+    .form-group input:focus,
+    .form-group textarea:focus {
+      outline: none;
+      border-color: #0d6efd;
+      background: #fff;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Buttons                                                              */
+    /* ------------------------------------------------------------------ */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.6rem 1.4rem;
+      border: none;
+      border-radius: 7px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+    }
+    .btn:hover  { filter: brightness(1.08); }
+    .btn:active { transform: scale(0.98); }
+    .btn-primary { background: #0d6efd; color: #fff; }
+    .btn-secondary { background: #1b2a4a; color: #fff; }
+
+    /* ------------------------------------------------------------------ */
+    /* Spinner                                                              */
+    /* ------------------------------------------------------------------ */
+    .spinner {
+      display: inline-block;
+      width: 18px;
+      height: 18px;
+      border: 3px solid rgba(255,255,255,0.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .hidden { display: none !important; }
+
+    /* ------------------------------------------------------------------ */
+    /* Result box                                                           */
+    /* ------------------------------------------------------------------ */
+    #result-section {
+      margin-top: 1.3rem;
+      padding: 1.2rem 1.4rem;
+      background: #f8f9fa;
+      border-radius: 9px;
+      border-left: 5px solid #ced4da;
+      animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; } }
+
+    .result-row {
+      display: flex;
+      align-items: center;
+      gap: 0.9rem;
+      margin-bottom: 0.9rem;
+      flex-wrap: wrap;
+    }
+    .result-label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #6c757d;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      min-width: 90px;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Priority badges                                                      */
+    /* ------------------------------------------------------------------ */
+    .badge {
+      display: inline-block;
+      padding: 0.3rem 0.85rem;
+      border-radius: 20px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      color: #fff;
+    }
+    .badge-high   { background: #dc3545; }
+    .badge-medium { background: #fd7e14; }
+    .badge-low    { background: #0d6efd; }
+    .badge-spam   { background: #6c757d; }
+
+    /* ------------------------------------------------------------------ */
+    /* Confidence bar                                                       */
+    /* ------------------------------------------------------------------ */
+    .confidence-wrap {
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+      flex: 1;
+      min-width: 180px;
+    }
+    .progress-track {
+      flex: 1;
+      height: 10px;
+      background: #dee2e6;
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      border-radius: 99px;
+      background: linear-gradient(90deg, #0d6efd, #6610f2);
+      width: 0%;
+      transition: width 0.6s cubic-bezier(0.4,0,0.2,1);
+    }
+    .confidence-pct {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #212529;
+      min-width: 40px;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Error message                                                        */
+    /* ------------------------------------------------------------------ */
+    .error-msg {
+      color: #dc3545;
+      font-size: 0.9rem;
+      margin-top: 0.8rem;
+      padding: 0.6rem 0.9rem;
+      background: #fff5f5;
+      border: 1px solid #f5c6cb;
+      border-radius: 7px;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Batch table                                                          */
+    /* ------------------------------------------------------------------ */
+    #batch-section { margin-top: 1.3rem; }
+    .table-wrap { overflow-x: auto; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    thead th {
+      background: #0d1b2a;
+      color: #fff;
+      padding: 0.7rem 1rem;
+      text-align: left;
+      font-weight: 600;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    tbody tr { border-bottom: 1px solid #e9ecef; }
+    tbody tr:hover { background: #f8f9fa; }
+    tbody td {
+      padding: 0.75rem 1rem;
+      vertical-align: middle;
+    }
+    .email-num {
+      font-weight: 700;
+      color: #6c757d;
+      text-align: center;
+    }
+    .subject-cell { font-weight: 500; color: #0d1b2a; }
+    .conf-cell { color: #495057; font-size: 0.88rem; }
+
+    /* ------------------------------------------------------------------ */
+    /* Responsive                                                           */
+    /* ------------------------------------------------------------------ */
+    @media (max-width: 600px) {
+      header h1 { font-size: 1.5rem; }
+      .card { padding: 1.2rem 1.1rem; }
+      .result-row { flex-direction: column; align-items: flex-start; }
+      .confidence-wrap { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ================================================================ -->
+  <!-- Header                                                            -->
+  <!-- ================================================================ -->
+  <header>
+    <h1>&#9993; Email Priority Classifier</h1>
+    <p>Intelligent NLP-powered email triage</p>
+  </header>
+
+  <!-- ================================================================ -->
+  <!-- Main content                                                      -->
+  <!-- ================================================================ -->
+  <main>
+
+    <!-- ---- Single email card ---------------------------------------- -->
+    <section class="card" aria-labelledby="single-heading">
+      <h2 id="single-heading">Single Email Classification</h2>
+
+      <div class="form-group">
+        <label for="subject-input">Subject</label>
+        <input
+          type="text"
+          id="subject-input"
+          placeholder="e.g. URGENT: Server down"
+          aria-label="Email subject"
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="body-input">Body</label>
+        <textarea
+          id="body-input"
+          rows="6"
+          placeholder="Type or paste the email body here..."
+          aria-label="Email body"
+        ></textarea>
+      </div>
+
+      <button class="btn btn-primary" id="classify-btn" onclick="classifyEmail()">
+        <span id="classify-spinner" class="spinner hidden" aria-hidden="true"></span>
+        <span id="classify-btn-text">Classify Email</span>
+      </button>
+
+      <!-- Result section (hidden until a result arrives) -->
+      <div id="result-section" class="hidden" role="region" aria-live="polite" aria-label="Classification result">
+        <div class="result-row">
+          <span class="result-label">Priority</span>
+          <span id="priority-badge" class="badge"></span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">Confidence</span>
+          <div class="confidence-wrap">
+            <div class="progress-track" role="progressbar" aria-label="Confidence">
+              <div class="progress-fill" id="conf-bar"></div>
+            </div>
+            <span class="confidence-pct" id="conf-pct"></span>
+          </div>
+        </div>
+      </div>
+
+      <div id="single-error" class="error-msg hidden" role="alert"></div>
+    </section>
+
+    <!-- ---- Batch demo card ------------------------------------------ -->
+    <section class="card" aria-labelledby="batch-heading">
+      <h2 id="batch-heading">Batch Demo</h2>
+      <p style="font-size:0.9rem;color:#6c757d;margin-bottom:1rem;">
+        Click the button below to classify five pre-loaded example emails at once.
+        Results are sorted by priority (highest first).
+      </p>
+
+      <button class="btn btn-secondary" id="batch-btn" onclick="runBatchDemo()">
+        <span id="batch-spinner" class="spinner hidden" aria-hidden="true"></span>
+        <span id="batch-btn-text">Run Batch Demo</span>
+      </button>
+
+      <div id="batch-section" class="hidden">
+        <div class="table-wrap" style="margin-top:1.2rem;">
+          <table aria-label="Batch classification results">
+            <thead>
+              <tr>
+                <th style="width:60px;">#</th>
+                <th>Subject</th>
+                <th>Priority</th>
+                <th>Confidence</th>
+              </tr>
+            </thead>
+            <tbody id="batch-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="batch-error" class="error-msg hidden" role="alert"></div>
+    </section>
+
+  </main>
+
+  <!-- ================================================================ -->
+  <!-- JavaScript                                                        -->
+  <!-- ================================================================ -->
+  <script>
+    "use strict";
+
+    // Pre-loaded demo emails for the batch demo
+    const DEMO_EMAILS = [
+      {
+        subject: "URGENT: Production server is down",
+        body: "The main production server crashed 10 minutes ago. All services are affected. Need immediate action."
+      },
+      {
+        subject: "Team meeting rescheduled to Thursday",
+        body: "Hi team, just a heads up that our weekly sync has moved to Thursday 2pm. Please update your calendars."
+      },
+      {
+        subject: "Monthly company newsletter",
+        body: "Check out what happened at our company this month! New hires, events, and upcoming milestones."
+      },
+      {
+        subject: "Congratulations! You won $1000",
+        body: "Click here to claim your prize. Limited time offer. Provide your bank details to receive your reward."
+      },
+      {
+        subject: "FYI: Updated parking policy",
+        body: "Please note the parking policy has been updated. Read the attached document for new guidelines when you have time."
+      }
+    ];
+
+    // ------------------------------------------------------------------
+    // Utility helpers
+    // ------------------------------------------------------------------
+
+    /** Map a priority label to a CSS class suffix. */
+    function priorityClass(label) {
+      const map = {
+        "High Priority":   "high",
+        "Medium Priority": "medium",
+        "Low Priority":    "low",
+        "Spam":            "spam"
+      };
+      return map[label] || "low";
+    }
+
+    /** Format a 0-1 float as a percentage string e.g. "94.2%". */
+    function fmtPct(val) {
+      return (val * 100).toFixed(1) + "%";
+    }
+
+    /** Show or hide a spinner inside a button. */
+    function setLoading(spinnerId, btnTextId, isLoading, defaultText) {
+      const spinner = document.getElementById(spinnerId);
+      const btnText = document.getElementById(btnTextId);
+      if (isLoading) {
+        spinner.classList.remove("hidden");
+        btnText.textContent = "Processing…";
+      } else {
+        spinner.classList.add("hidden");
+        btnText.textContent = defaultText;
+      }
+    }
+
+    // ------------------------------------------------------------------
+    // Single email classification
+    // ------------------------------------------------------------------
+
+    async function classifyEmail() {
+      const subject = document.getElementById("subject-input").value.trim();
+      const body    = document.getElementById("body-input").value.trim();
+      const errEl   = document.getElementById("single-error");
+      const resEl   = document.getElementById("result-section");
+
+      // Hide previous results / errors
+      errEl.classList.add("hidden");
+      resEl.classList.add("hidden");
+
+      if (!subject && !body) {
+        errEl.textContent = "Please enter a subject or body before classifying.";
+        errEl.classList.remove("hidden");
+        return;
+      }
+
+      setLoading("classify-spinner", "classify-btn-text", true, "Classify Email");
+
+      try {
+        const response = await fetch("/predict", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ subject, body })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || data.error || "Server error.");
+        }
+
+        // Populate result section
+        const badge = document.getElementById("priority-badge");
+        badge.textContent = data.priority;
+        badge.className   = "badge badge-" + priorityClass(data.priority);
+
+        const pct = Math.round(data.confidence * 100);
+        document.getElementById("conf-pct").textContent = pct + "%";
+
+        // Animate the progress bar (reset to 0 first for re-animation)
+        const bar = document.getElementById("conf-bar");
+        bar.style.width = "0%";
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => { bar.style.width = pct + "%"; });
+        });
+
+        // Update border accent colour
+        resEl.style.borderLeftColor = getComputedStyle(badge).backgroundColor;
+        resEl.classList.remove("hidden");
+
+      } catch (err) {
+        errEl.textContent = "Error: " + err.message;
+        errEl.classList.remove("hidden");
+      } finally {
+        setLoading("classify-spinner", "classify-btn-text", false, "Classify Email");
+      }
+    }
+
+    // ------------------------------------------------------------------
+    // Batch demo
+    // ------------------------------------------------------------------
+
+    async function runBatchDemo() {
+      const errEl    = document.getElementById("batch-error");
+      const section  = document.getElementById("batch-section");
+      const tbody    = document.getElementById("batch-table-body");
+
+      errEl.classList.add("hidden");
+      section.classList.add("hidden");
+
+      setLoading("batch-spinner", "batch-btn-text", true, "Run Batch Demo");
+
+      try {
+        const response = await fetch("/batch_predict", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ emails: DEMO_EMAILS })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || data.error || "Server error.");
+        }
+
+        // Build table rows
+        tbody.innerHTML = "";
+        data.results.forEach((item, idx) => {
+          const pct   = Math.round(item.confidence * 100);
+          const cls   = priorityClass(item.priority);
+          const row   = document.createElement("tr");
+          row.innerHTML = `
+            <td class="email-num">${idx + 1}</td>
+            <td class="subject-cell">${escapeHtml(item.subject)}</td>
+            <td><span class="badge badge-${cls}">${escapeHtml(item.priority)}</span></td>
+            <td class="conf-cell">${pct}%</td>
+          `;
+          tbody.appendChild(row);
+        });
+
+        section.classList.remove("hidden");
+
+      } catch (err) {
+        errEl.textContent = "Error: " + err.message;
+        errEl.classList.remove("hidden");
+      } finally {
+        setLoading("batch-spinner", "batch-btn-text", false, "Run Batch Demo");
+      }
+    }
+
+    // ------------------------------------------------------------------
+    // Security: sanitise strings before inserting as HTML
+    // ------------------------------------------------------------------
+    function escapeHtml(str) {
+      const d = document.createElement("div");
+      d.appendChild(document.createTextNode(str));
+      return d.innerHTML;
+    }
+
+    // Allow Enter key in subject field to trigger classification
+    document.getElementById("subject-input").addEventListener("keydown", function(e) {
+      if (e.key === "Enter") classifyEmail();
+    });
+  </script>
+
+</body>
+</html>
